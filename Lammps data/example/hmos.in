@@ -1,0 +1,107 @@
+units           metal 
+dimension	3
+boundary	p p p
+atom_style	atomic
+neighbor	2 bin
+neigh_modify	delay 5 check yes
+
+read_data      mos2.data extra/atom/types 1  
+mass            1 32.066
+mass            2 95.94
+mass            3 32.066
+mass            4 32.066
+mass            5 95.94
+mass            6 32.066
+mass            7 32.066
+mass            8 95.94
+mass            9 32.066
+mass            10 32.066
+mass            11 95.94
+mass            12 32.066
+read_data      cu.data add append offset 12 0 0 0 0 shift 0 0 -3.25 #28.5
+mass            13 63.45
+
+#potentials
+pair_style      hybrid  lj/cut 10.0  eam sw
+pair_coeff      * * sw h-mos2.sw  S1 Mo1 S2 S3 Mo2 S4 S5 Mo3 S6 S7 Mo4 S8 NULL 
+pair_coeff      13 13 eam Cu_u3.eam
+
+pair_coeff      1 13 lj/cut 0.0016051  3.3542
+pair_coeff      2 13 lj/cut 0.00072562  2.9164
+pair_coeff      3 13 lj/cut 0.0016051  3.3542
+
+pair_coeff      4 13 lj/cut 0.0016051  3.3542
+pair_coeff      5 13 lj/cut 0.00072562  2.9164
+pair_coeff      6 13 lj/cut 0.0016051  3.3542
+pair_coeff      7 13 lj/cut 0.0016051  3.3542
+pair_coeff      8 13 lj/cut 0.00072562  2.9164
+pair_coeff      9 13 lj/cut 0.0016051  3.3542
+pair_coeff      10 13 lj/cut 0.0016051  3.3542
+pair_coeff      11 13 lj/cut 0.00072562  2.9164
+pair_coeff      12 13 lj/cut 0.0016051  3.3542
+
+dump            1 all custom 1000 re.dump id type x y z fx fy fz
+write_data     com.data
+
+group            mos type 1 2 3 4 5 6 7 8 9 10 12 
+group            cu type 13
+
+#-------------------------------- SETTINGS ---------------------------------
+#compute             csym all centro/atom fcc
+#compute             peratom all pe/atom
+variable            T equal 10
+#-------------------------------- Minimization -----------------------------
+min_style           cg
+minimize            1e-15 1e-15 10000 10000
+write_data          mini.data
+#-------------------------------- EQUILIBRATION ----------------------------
+#unfix               1
+reset_timestep      0
+timestep            0.001
+velocity            all create $T 12345 mom yes rot no loop local
+fix                 1 all npt temp $T $T 0.1 aniso 0 0 1 drag 1 
+thermo              1000
+thermo_style        custom step lx ly lz press pxx pyy pzz pe temp
+# Run for 60 picosecond (assuming 1 fs timestep)
+run                60000
+unfix               1
+write_data          equli.data
+write_restart	     equli.restart
+# Store final cell length for strain calculations
+variable            tmp equal "lz"
+variable            L0 equal ${tmp}
+print               "Initial Length, L0: ${L0}"
+#-------------------------------------- Deformation --------------------------------
+reset_timestep      0
+fix                 1 all npt temp $T $T 0.1 x 0 0 1 y 0 0 1 drag 1
+variable            srate equal 4.0e9
+variable            srate1 equal "-v_srate / 1.0e12"
+fix                 2 all deform 1 z erate ${srate1} units box remap x
+# Output strain and stress info to file
+# for units metal, pressure is in [bars] = 100 [kPa] = 1/10000 [GPa]
+# p2, p3, p4 are in GPa
+variable            strain equal "(v_L0 - lz)/v_L0"
+variable            p1 equal "v_strain"
+variable            p2 equal "pxx/10000"
+variable            p3 equal "pyy/10000"
+variable            p4 equal "pzz/10000"
+fix                 def1 all print 100 "${p1} ${p2} ${p3} ${p4}" file compress.txt screen no
+# set dumpfile for ovito
+#dump                2 all custom 1000  compress.dump mass type x y z fx fy fz
+
+# Display thermo
+thermo              1000
+thermo_style        custom step v_strain temp v_p1 v_p2 v_p3 v_p4 ke pe press
+run                 50000
+#--------------------------------------- SIMULATION DONE ----------------------------------
+# 
+print               "All done"
+
+
+
+
+
+
+
+
+

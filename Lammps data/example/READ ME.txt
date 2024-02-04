@@ -1,0 +1,1 @@
+The calculation examples of this study are given in EXAMPLE, and the remaining cases only need to replace the TMDs material
